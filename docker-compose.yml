@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  tracker:
+    build: .
+    container_name: p2p_tracker
+    command: python -u src/tracker.py
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./src:/app/src
+    networks:
+      p2p_network:
+        ipv4_address: 172.20.0.2
+
+  seeder:
+    build: .
+    container_name: p2p_seeder
+    command: python -u src/client_handler.py 172.20.0.3 8001 172.20.0.2 8888
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./src:/app/src
+      - ./input:/app/files
+      - ./output:/app/output
+    depends_on:
+      - tracker
+    networks:
+      p2p_network:
+        ipv4_address: 172.20.0.3
+    # These flags enable input
+    stdin_open: true
+    tty: true
+
+  leecher1:
+    build: .
+    container_name: p2p_leecher1
+    command: python -u src/client_handler.py 172.20.0.4 8002 172.20.0.2 8888
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./src:/app/src
+      - ./output/leecher1:/app/output
+    depends_on:
+      - tracker
+      - seeder
+    networks:
+      p2p_network:
+        ipv4_address: 172.20.0.4
+    stdin_open: true
+    tty: true
+
+  leecher2:
+    build: .
+    container_name: p2p_leecher2
+    command: python -u src/client_handler.py 172.20.0.5 8003 172.20.0.2 8888
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./src:/app/src
+      - ./output/leecher2:/app/output
+    depends_on:
+      - tracker
+      - seeder
+    networks:
+      p2p_network:
+        ipv4_address: 172.20.0.5
+    stdin_open: true
+    tty: true
+
+networks:
+  p2p_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
