@@ -1,0 +1,41 @@
+version: '3'
+services:
+  tracker:
+    build: .
+    container_name: tracker
+    working_dir: /app
+    command: ["python", "tracker.py"]
+    ports:
+      - "8000:8000"
+    networks:
+      - p2p-net
+
+  seeder:
+    build: .
+    container_name: seeder
+    working_dir: /app
+    command: ["python", "peer.py", "0.0.0.0", "5000", "/app/shared_files1", "/app/downloaded_files"]
+    volumes:
+      - ./shared_files1:/app/shared_files1
+      - ./downloaded_files:/app/downloaded_files
+    depends_on:
+      - tracker
+    networks:
+      - p2p-net
+
+  leecher:
+    build: .
+    container_name: leecher
+    working_dir: /app
+    command: ["python", "peer.py", "0.0.0.0", "5001", "/app/shared_files2", "/app/downloaded_files"]
+    volumes:
+      - ./shared_files2:/app/shared_files2
+      - ./downloaded_files:/app/downloaded_files
+    depends_on:
+      - tracker
+    networks:
+      - p2p-net
+
+networks:
+  p2p-net:
+    driver: bridge
