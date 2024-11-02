@@ -24,7 +24,7 @@ class Tracker:
 
             if chunks:
                 # If chunks are provided, register as seeder
-                torrent.add_seeder(peer_address)
+                torrent.add_seeder(peer_address, chunks)
             else:
                 # Otherwise, register as leecher
                 torrent.add_leecher(peer_address)
@@ -36,14 +36,18 @@ class Tracker:
             """Get the list of seeders for a specific file."""
             file_name = request.args.get('file')
             if file_name in self.torrents:
-                return jsonify(self.torrents[file_name].seeders), 200
+                # Convert the set of seeders to a list before serializing
+                seeders_list = list(self.torrents[file_name].seeders)
+                return jsonify(seeders_list), 200
             return "File not found", 404
+
 
         @self.app.route('/chunks', methods=['GET'])
         def get_chunk_info():
             """Return chunk hashes for the requested file."""
             file_name = request.args.get('file')
             torrent = self.torrents.get(file_name)
+            print(f"File requested for download: {torrent.file_name} with available hashes: {torrent.chunk_hashes}")
             if torrent:
                 return jsonify(torrent.chunk_hashes), 200
             return "File not found", 404

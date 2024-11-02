@@ -155,15 +155,30 @@ class Peer:
             client.connect((peer_ip, peer_port))
             client.sendall(f"{file_name}:{chunk_id}".encode('utf-8'))
 
-            data = client.recv(CHUNK_SIZE)
+            # Open the chunk file for writing the received data
+            chunk_filename = f"{file_name}_chunk_{chunk_id}"
+            with open(chunk_filename, 'wb') as chunk_file:
+                while True:
+                    data = client.recv(CHUNK_SIZE)
+                    if not data:
+                        break  # End of data stream
+                    chunk_file.write(data)  # Write received data to the chunk file
+
             client.close()
 
+            # Verify the chunk integrity after receiving the data
             if FileHandler.verify_chunk(chunk_id, file_name, self.chunk_hashes[file_name][str(chunk_id)]):
-                self.available_chunks[file_name].add(chunk_id)
+                print(f"Chunk {chunk_id} of {file_name} received and verified.")
+                self.available_chunks.setdefault(file_name, set()).add(chunk_id)
                 return True
+            else:
+                print(f"Chunk {chunk_id} of {file_name} is corrupted.")
+                return False
+
         except Exception as e:
-            print(f"Error requesting chunk: {e}")
-        return False
+            print(f"Error requesting chunk {chunk_id} from {peer_ip}:{peer_port} - {e}")
+            return False
+
 
 if __name__ == "__main__":
     # Ensure the correct number of command-line arguments are provided
