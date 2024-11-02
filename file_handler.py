@@ -1,7 +1,23 @@
 import os
 import hashlib
+from protocol import CHUNK_SIZE
+import base64
+#CHUNK_SIZE = 512 * 1024  # 512 KB
 
-CHUNK_SIZE = 512 * 1024  # 512 KB
+
+def encode_file(file_name:str):
+    chunks = [] 
+    with open(file_name, 'rb') as f:
+        chunk = f.read(CHUNK_SIZE)
+        while chunk:
+            chunks.append(base64.b64encode(chunk).decode('utf-8'))
+            chunk = f.read(CHUNK_SIZE)
+    return len(chunks), chunks
+
+def decode_file(chunks:list, path):
+    with open(path, 'wb') as f:
+        for chunk in chunks:
+            f.write(base64.b64decode(chunk.encode('utf-8')))
 
 class FileHandler:
     @staticmethod
