@@ -89,9 +89,9 @@ class TrackerServer:
     def get_torrent_list(self) -> list:
         """Get list of all available torrents"""
         return [{
-            TID: torrent.tid,
+            TID: torrent.id,
             FILE_NAME: torrent.filename,
-            TOTAL_PIECES: torrent.pieces,
+            TOTAL_CHUNKS: torrent.num_of_chunks,
             SEEDER_LIST: torrent.get_seeders(),
             LEECHER_LIST: torrent.get_leechers()
         } for torrent in self.torrents.values()]
@@ -102,9 +102,9 @@ class TrackerServer:
         torrent.add_leecher(request[PID], request[IP], request[PORT])
         
         return {
-            TID: torrent.tid,
+            TID: torrent.id,
             FILE_NAME: torrent.filename,
-            TOTAL_PIECES: torrent.pieces,
+            TOTAL_CHUNKS: torrent.num_of_chunks,
             SEEDER_LIST: torrent.get_seeders(),
             LEECHER_LIST: torrent.get_leechers()
         }
@@ -151,7 +151,7 @@ class TrackerServer:
         new_torrent = Torrent(
             self.next_torrent_id,
             request[FILE_NAME],
-            request[TOTAL_PIECES]
+            request[TOTAL_CHUNKS]
         )
         new_torrent.add_seeder(request[PID], request[IP], request[PORT])
         
@@ -159,7 +159,7 @@ class TrackerServer:
         self.torrents[self.next_torrent_id] = new_torrent
         self.next_torrent_id += 1
         
-        return RET_SUCCESS, new_torrent.tid
+        return RET_SUCCESS, new_torrent.id
 
     async def receive_request(self, reader, writer):
         """Handle incoming connection and request"""

@@ -12,8 +12,6 @@ services:
     networks:
       p2p_network:
         ipv4_address: 172.20.0.2
-    environment:
-      - PYTHONUNBUFFERED=1
 
   seeder:
     build: .
@@ -23,18 +21,16 @@ services:
       - "8001:8001"
     volumes:
       - ./src:/app/src
-      - ./input:/app/files  # Directory containing files to share
+      - ./input:/app/files
       - ./output:/app/output
     depends_on:
       - tracker
     networks:
       p2p_network:
         ipv4_address: 172.20.0.3
-    environment:
-      - ROLE=seeder
-      - PYTHONUNBUFFERED=1
-    stdin_open: true  # Keep STDIN open
-    tty: true        # Allocate a pseudo-TTY
+    # These flags enable input
+    stdin_open: true
+    tty: true
 
   leecher1:
     build: .
@@ -51,9 +47,6 @@ services:
     networks:
       p2p_network:
         ipv4_address: 172.20.0.4
-    environment:
-      - ROLE=leecher
-      - PYTHONUNBUFFERED=1
     stdin_open: true
     tty: true
 
@@ -72,9 +65,6 @@ services:
     networks:
       p2p_network:
         ipv4_address: 172.20.0.5
-    environment:
-      - ROLE=leecher
-      - PYTHONUNBUFFERED=1
     stdin_open: true
     tty: true
 

@@ -7,8 +7,19 @@ import sys
 import json
 from socket import *
 from protocol import *
+from chunk import *
 import file_handler as fh
-from chunk import Chunk
+from file_chunk import ChunkBuffer, Chunk
+import os
+
+def print_file_tree(start_path='.'):
+    for root, dirs, files in os.walk(start_path):
+        level = root.replace(start_path, '').count(os.sep)
+        indent = ' ' * 4 * level
+        print(f"{indent}{os.path.basename(root)}/")
+        sub_indent = ' ' * 4 * (level + 1)
+        for f in files:
+            print(f"{sub_indent}{f}")
 
 class State:
     def __init__(self):
@@ -28,6 +39,7 @@ class ClientHelper:
         """
         Distribute chunk requests evenly among available peers
         """
+        print("distribute_chunks_evenly")
         num_peers = len(self.client.seeder_list)
         peer_list = list(self.client.seeder_list.values())
         request_list = [self.client.create_peer_request(OPT_GET_CHUNK, i) for i in range(num_chunks)]
@@ -67,13 +79,14 @@ class ClientHelper:
         Prepare file for seeding by splitting into chunks
         """
         try:
+            print(f"[info:] uploading file as seeder {filename}")
             chunks_size, chunks = fh.encode_file(filename)
             self.client.chunk_buffer.set_buffer(chunks_size)
             for idx, chunk_data in enumerate(chunks):
                 self.client.chunk_buffer.add_data(Chunk(idx, chunk_data))
             return chunks_size
-        except:
-            print(f"[error] failed to read file: '{filename}'")
+        except Exception as e:
+            print(f"[error:{e}] failed to read file: '{filename}'")
             return 0
 
     def strip_filename(self, filename: str) -> str:
@@ -110,8 +123,7 @@ class Client:
         self.state = State()
         self.helper = ClientHelper(self)
         self.seeder_list = {}
-        self.chunk_buffer = None
-        self.torrent_id = None
+        self.chunk_buffer = ChunkBuffer()
     
     @staticmethod
     def generate_id(ip: str, port: str) -> str:
@@ -155,6 +167,7 @@ class Client:
         Handle incoming peer requests and send response
         """
         try:
+            print("HERE")
             data = await reader.read(READ_SIZE)
             peer_request = json.loads(data.decode())
             addr = writer.get_extra_info('peername')
@@ -193,7 +206,9 @@ class Client:
         """
         Receive and decode messages, route to appropriate handler
         """
+        print("RECEIVED")
         data = await reader.read(READ_SIZE)
+        print("AFTER READ")
         payload = json.loads(data.decode())
         print(f'[debug] received message: {payload}')
         opc = payload[OPC]

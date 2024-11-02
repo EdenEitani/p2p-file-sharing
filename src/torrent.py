@@ -2,27 +2,26 @@ from client import Client
 from protocol import *
 
 class Torrent:
-    def __init__(self, id, file_name, chunks, file_size):
-        self.id
+    def __init__(self, id, file_name, num_of_chunks):
+        self.id = id
         self.file_name = file_name
-        self.file_size = file_size
-        self.chunks = chunks
+        self.num_of_chunks = num_of_chunks
         self.seeders = dict()  
         self.leechers = dict()
 
-    def add_seeder(self, seeder: Client):
+    def add_seeder(self, id, ip, port):
         seeder = dict()
-        seeder['ip'] = seeder.ip
-        seeder['port'] = seeder.port
-        self.seeders[seeder.id] = seeder
+        seeder[IP] = ip
+        seeder[PORT] = port
+        self.seeders[id] = seeder
         # if seeder.id in self.leechers:
         #     self.leechers.remove(seeder.id)
 
-    def add_leecher(self, leecher: Client):
+    def add_leecher(self, id, ip, port):
         leecher = dict()
-        leecher['ip'] = leecher.ip
-        leecher['port'] = leecher.port
-        self.leechers[leecher.id] = leecher
+        leecher[IP] = ip
+        leecher[PORT] = port
+        self.leechers[id] = leecher
         # if leecher.id in self.seeders:
         #     self.seeders.remove(leecher.id)
 

@@ -6,6 +6,16 @@ from client import Client
 from protocol import *
 import asyncio
 import sys
+import os
+
+def print_file_tree(start_path='.'):
+    for root, dirs, files in os.walk(start_path):
+        level = root.replace(start_path, '').count(os.sep)
+        indent = ' ' * 4 * level
+        print(f"{indent}{os.path.basename(root)}/")
+        sub_indent = ' ' * 4 * (level + 1)
+        for f in files:
+            print(f"{sub_indent}{f}")
 
 def display_menu():
     """Display main menu options"""
@@ -45,6 +55,7 @@ def get_user_choice():
     """Get and validate user menu choice"""
     while True:
         try:
+            # print_file_tree()
             choice = int(display_menu())
             if choice in range(1, 6):
                 if choice == 1:
@@ -54,6 +65,7 @@ def get_user_choice():
                     return [OPT_GET_TORRENT, torrent_id, None]
                 elif choice == 3:
                     filename = input("Enter filename: ")
+                    filename = "input/image.jpg"
                     return [OPT_UPLOAD_FILE, None, filename]
                 elif choice == 4:
                     display_help()
@@ -115,7 +127,7 @@ def parse_arguments():
 
     return src_ip, src_port, dest_ip, dest_port
 
-async def handle_client_operation(client, writer, operation):
+async def handle_client_operation(client, reader, writer, operation):
     """Handle a single client operation"""
     if not operation[0] > 0:
         writer.close()
@@ -131,7 +143,8 @@ async def handle_client_operation(client, writer, operation):
         return True, None
 
     await client.send_message(writer, payload)
-    result = await client.receive_message(writer)
+    print("receiving request from handler")
+    result = await client.receive_message(reader)
     return False, result
 
 async def handle_seeding_completion(client, reader, writer, dest_ip, dest_port, torrent_id):
@@ -164,7 +177,7 @@ async def run_client_loop(client, dest_ip, dest_port):
             writer.close()
             return
 
-        should_continue, result = await handle_client_operation(client, writer, operation)
+        should_continue, result = await handle_client_operation(client, reader, writer, operation)
         if should_continue:
             continue
 
