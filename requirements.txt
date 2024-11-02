@@ -1,3 +1,2 @@
-flask
-requests
-tqdm
+aiofiles==23.2.1
+asyncio==3.4.3

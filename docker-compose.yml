@@ -1,41 +1,87 @@
-version: '3'
+version: '3.8'
+
 services:
   tracker:
     build: .
-    container_name: tracker
-    working_dir: /app
-    command: ["python", "tracker.py"]
+    container_name: p2p_tracker
+    command: python -u src/tracker.py
     ports:
-      - "8000:8000"
+      - "8888:8888"
+    volumes:
+      - ./src:/app/src
     networks:
-      - p2p-net
+      p2p_network:
+        ipv4_address: 172.20.0.2
+    environment:
+      - PYTHONUNBUFFERED=1
 
   seeder:
     build: .
-    container_name: seeder
-    working_dir: /app
-    command: ["python", "peer.py", "0.0.0.0", "5000", "/app/shared_files1", "/app/downloaded_files"]
+    container_name: p2p_seeder
+    command: python -u src/client_handler.py 172.20.0.3 8001 172.20.0.2 8888
+    ports:
+      - "8001:8001"
     volumes:
-      - ./shared_files1:/app/shared_files1
-      - ./downloaded_files:/app/downloaded_files
+      - ./src:/app/src
+      - ./input:/app/files  # Directory containing files to share
+      - ./output:/app/output
     depends_on:
       - tracker
     networks:
-      - p2p-net
+      p2p_network:
+        ipv4_address: 172.20.0.3
+    environment:
+      - ROLE=seeder
+      - PYTHONUNBUFFERED=1
+    stdin_open: true  # Keep STDIN open
+    tty: true        # Allocate a pseudo-TTY
 
-  leecher:
+  leecher1:
     build: .
-    container_name: leecher
-    working_dir: /app
-    command: ["python", "peer.py", "0.0.0.0", "5001", "/app/shared_files2", "/app/downloaded_files"]
+    container_name: p2p_leecher1
+    command: python -u src/client_handler.py 172.20.0.4 8002 172.20.0.2 8888
+    ports:
+      - "8002:8002"
     volumes:
-      - ./shared_files2:/app/shared_files2
-      - ./downloaded_files:/app/downloaded_files
+      - ./src:/app/src
+      - ./output/leecher1:/app/output
     depends_on:
       - tracker
+      - seeder
     networks:
-      - p2p-net
+      p2p_network:
+        ipv4_address: 172.20.0.4
+    environment:
+      - ROLE=leecher
+      - PYTHONUNBUFFERED=1
+    stdin_open: true
+    tty: true
+
+  leecher2:
+    build: .
+    container_name: p2p_leecher2
+    command: python -u src/client_handler.py 172.20.0.5 8003 172.20.0.2 8888
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./src:/app/src
+      - ./output/leecher2:/app/output
+    depends_on:
+      - tracker
+      - seeder
+    networks:
+      p2p_network:
+        ipv4_address: 172.20.0.5
+    environment:
+      - ROLE=leecher
+      - PYTHONUNBUFFERED=1
+    stdin_open: true
+    tty: true
 
 networks:
-  p2p-net:
+  p2p_network:
     driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
