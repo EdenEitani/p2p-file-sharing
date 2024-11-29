@@ -185,10 +185,15 @@ async def run_client_loop(client, dest_ip, dest_port):
             result = await handle_seeding_completion(
                 client, reader, writer, dest_ip, dest_port, operation[1]
             )
+            # Don't break after starting to seed, just continue the loop
+            if result == ReturnCode.FINISHED_SEEDING:
+                writer.close()
+                continue
 
         if result == ReturnCode.FINISHED_SEEDING:
             await handle_seeding_termination(client, reader, writer, dest_ip, dest_port)
-            break
+            writer.close()
+            continue
 
         if result != ReturnCode.SUCCESS:
             writer.close()
