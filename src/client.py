@@ -207,8 +207,8 @@ class Client:
         print("AFTER READ")
         payload = json.loads(data.decode())
         print(f'[debug] received message: {payload}')
-        opc = payload[PayloadField.OPERATION_CODE]
-        if opc > 9:
+        opcode = payload[PayloadField.OPERATION_CODE]
+        if opcode > 9:
             res = await self.handle_server_response(payload)
         else:
             res = self.handle_peer_response(payload)
@@ -228,9 +228,8 @@ class Client:
         Handle server response and return appropriate status code
         """
         ret = response[PayloadField.RETURN_CODE]
-        opc = response[PayloadField.OPERATION_CODE]
+        opcode = response[PayloadField.OPERATION_CODE]
 
-        # Handle error responses
         if ret == ReturnCode.FAIL:
             print("[error] server request failed")
             return -1
@@ -244,12 +243,11 @@ class Client:
             print("[error] torrent id does not exist")
             return -1
 
-        # Handle successful responses
-        if opc == PeerServerOperation.GET_LIST:
+        if opcode == PeerServerOperation.GET_LIST:
             self.helper.display_torrent_list(response[PayloadField.TORRENT_LIST])
             return ReturnCode.SUCCESS
             
-        elif opc == PeerServerOperation.GET_TORRENT:
+        elif opcode == PeerServerOperation.GET_TORRENT:
             torrent = response[PayloadField.TORRENT_OBJ]
             self.state.leeching = True
             self.seeder_list = torrent[PayloadField.SEEDER_LIST]
@@ -257,33 +255,33 @@ class Client:
             await self.helper.download_file(torrent[PayloadField.NUM_OF_CHUNKS], torrent[PayloadField.FILE_NAME])
             return ReturnCode.FINISHED_DOWNLOAD    
             
-        elif opc == PeerServerOperation.START_SEED or opc == PeerServerOperation.UPLOAD_FILE:
+        elif opcode == PeerServerOperation.START_SEED or opcode == PeerServerOperation.UPLOAD_FILE:
             self.state.leeching = False
             self.state.seeding = True
             self.torrent_id = response[PayloadField.TORRENT_ID]
             await self.start_seeding()
             return ReturnCode.FINISHED_SEEDING
             
-        elif opc == PeerServerOperation.STOP_SEED:
+        elif opcode == PeerServerOperation.STOP_SEED:
             self.state.seeding = False
             return ReturnCode.FINISHED_SEEDING
 
         return 1
 
-    def create_server_request(self, opc: int, torrent_id=None, filename=None) -> dict:
+    def create_server_request(self, opcode: int, torrent_id=None, filename=None) -> dict:
         """
         Create server request payload
         """
         payload = {
-            PayloadField.OPERATION_CODE: opc,
+            PayloadField.OPERATION_CODE: opcode,
             PayloadField.IP_ADDRESS: self.ip,
             PayloadField.PORT: self.port,
             PayloadField.PEER_ID: self.id
         }
 
-        if opc in [PeerServerOperation.GET_TORRENT, PeerServerOperation.START_SEED, PeerServerOperation.STOP_SEED]:
+        if opcode in [PeerServerOperation.GET_TORRENT, PeerServerOperation.START_SEED, PeerServerOperation.STOP_SEED]:
             payload[PayloadField.TORRENT_ID] = torrent_id
-        elif opc == PeerServerOperation.UPLOAD_FILE:
+        elif opcode == PeerServerOperation.UPLOAD_FILE:
             num_chunks = self.helper.upload_file(filename)
             if num_chunks == 0:
                 return {}
@@ -297,14 +295,14 @@ class Client:
         Handle peer response
         """
         ret = response[PayloadField.RETURN_CODE]
-        opc = response[PayloadField.OPERATION_CODE]
+        opcode = response[PayloadField.OPERATION_CODE]
 
         if ret == ReturnCode.FAIL or ret != ReturnCode.SUCCESS:
             return -1
         
-        if opc == PeerOperation.GET_PEERS:
+        if opcode == PeerOperation.GET_PEERS:
             self.seeder_list = response[PayloadField.PEER_LIST]
-        elif opc == PeerOperation.GET_CHUNK:
+        elif opcode == PeerOperation.GET_CHUNK:
             data = response[PayloadField.CHUNK_DATA]
             idx = response[PayloadField.CHUNK_IDX]
             new_chunk = Chunk(idx, data)
@@ -316,17 +314,17 @@ class Client:
         """
         Handle peer request and return response
         """
-        opc = request[PayloadField.OPERATION_CODE]
+        opcode = request[PayloadField.OPERATION_CODE]
         response = {
-            PayloadField.OPERATION_CODE: opc,
+            PayloadField.OPERATION_CODE: opcode,
             PayloadField.IP_ADDRESS: self.ip,
             PayloadField.PORT: self.port
         }
 
-        if opc == PeerOperation.GET_PEERS:
+        if opcode == PeerOperation.GET_PEERS:
             response[PayloadField.PEER_LIST] = self.seeder_list
             response[PayloadField.RETURN_CODE] = ReturnCode.SUCCESS
-        elif opc == PeerOperation.GET_CHUNK:
+        elif opcode == PeerOperation.GET_CHUNK:
             chunk_idx = request[PayloadField.CHUNK_IDX]
             if self.chunk_buffer.has_chunk(chunk_idx):
                 response[PayloadField.CHUNK_DATA] = self.chunk_buffer.get_data(chunk_idx)
@@ -336,15 +334,15 @@ class Client:
                 response[PayloadField.RETURN_CODE] = ReturnCode.FAIL
         return response
         
-    def create_peer_request(self, opc: int, chunk_idx=None) -> dict:
+    def create_peer_request(self, opcode: int, chunk_idx=None) -> dict:
         """
         Create peer request payload
         """
         payload = {
-            PayloadField.OPERATION_CODE: opc,
+            PayloadField.OPERATION_CODE: opcode,
             PayloadField.IP_ADDRESS: self.ip,
             PayloadField.PORT: self.port
         }
-        if opc == PeerOperation.GET_CHUNK:
+        if opcode == PeerOperation.GET_CHUNK:
             payload[PayloadField.CHUNK_IDX] = chunk_idx
         return payload
