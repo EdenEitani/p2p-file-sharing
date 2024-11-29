@@ -7,6 +7,9 @@ from protocol import PeerServerOperation, ReturnCode, PayloadField
 import asyncio
 import sys
 import os
+from logger import setup_logger
+
+logger = setup_logger()
 
 def print_file_tree(start_path='.'):
     for root, dirs, files in os.walk(start_path):
@@ -71,9 +74,9 @@ def get_user_choice():
                     return [0, None, None]
                 else:  # choice == 5
                     return [-1, None, None]
-            print("[error] invalid choice, please try again")
+            logger.error("invalid choice, please try again")
         except ValueError:
-            print("[error] please enter a number")
+            logger.error("please enter a number")
 
 def validate_ip(ip: str) -> bool:
     """Validate IP address format"""
@@ -106,20 +109,20 @@ def parse_arguments():
     dest_port = args[3] if arg_count == 4 else None
 
     if not validate_ip(src_ip):
-        print("[error] invalid source IP address")
+        logger.error("invalid source IP address")
         return None, None, None, None
     
     if not validate_port(src_port):
-        print("[error] invalid source port number")
+        logger.error("invalid source port number")
         return None, None, None, None
 
     if arg_count == 4:
         if not validate_ip(dest_ip):
-            print("[error] invalid tracker IP address")
+            logger.error("invalid tracker IP address")
             return None, None, None, None
         
         if not validate_port(dest_port):
-            print("[error] invalid tracker port number")
+            logger.error("invalid tracker port number")
             return None, None, None, None
 
     return src_ip, src_port, dest_ip, dest_port
@@ -131,7 +134,7 @@ async def handle_client_operation(client, reader, writer, operation):
         return True, None
 
     payload = client.create_server_request(
-        opc=operation[0],
+        opcode=operation[0],
         torrent_id=operation[1],
         filename=operation[2]
     )
@@ -140,7 +143,7 @@ async def handle_client_operation(client, reader, writer, operation):
         return True, None
 
     await client.send_message(writer, payload)
-    print("receiving request from handler")
+    logger.info("receiving request from handler")
     result = await client.receive_message(reader)
     return False, result
 
@@ -148,7 +151,7 @@ async def handle_seeding_completion(client, reader, writer, dest_ip, dest_port, 
     """Handle the transition from downloading to seeding"""
     writer.close()
     reader, writer = await client.register_to_tracker(dest_ip, dest_port)
-    payload = client.create_server_request(opc=PeerServerOperation.START_SEED, torrent_id=torrent_id)
+    payload = client.create_server_request(opcode=PeerServerOperation.START_SEED, torrent_id=torrent_id)
     await client.send_message(writer, payload)
     result = await client.receive_message(reader)
     writer.close()
@@ -158,7 +161,7 @@ async def handle_seeding_termination(client, reader, writer, dest_ip, dest_port)
     """Handle cleanup when seeding is finished"""
     writer.close()
     reader, writer = await client.register_to_tracker(dest_ip, dest_port)
-    payload = client.create_server_request(opc=PeerServerOperation.STOP_SEED, torrent_id=client.torrent_id)
+    payload = client.create_server_request(opcode=PeerServerOperation.STOP_SEED, torrent_id=client.torrent_id)
     await client.send_message(writer, payload)
     result = await client.receive_message(reader)
     writer.close()
@@ -203,18 +206,18 @@ async def main():
     dest_ip = dest_ip or "127.0.0.1"
     dest_port = dest_port or "8888"
     
-    print(f"[info] connecting to tracker at {dest_ip}:{dest_port}")
-    print(f"[info] client address: {src_ip}:{src_port}")
+    logger.info(f"connecting to tracker at {dest_ip}:{dest_port}")
+    logger.info(f"client connected: {src_ip}:{src_port}")
     
     try:
         await run_client_loop(client, dest_ip, dest_port)
     except Exception as e:
-        print(f"[error] unexpected error: {str(e)}")
+        logger.error(f"unexpected error: {str(e)}")
     finally:
-        print("[info] shutting down client")
+        logger.info("closing connection to client")
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n[info] program terminated by user")
+        logger.info("\nterminated by keyboard interrupt")
