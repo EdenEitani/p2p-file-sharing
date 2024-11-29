@@ -11,6 +11,9 @@ from chunk import *
 import file_handler as fh
 from file_chunk import ChunkBuffer, Chunk
 import os
+from logger import setup_logger
+
+logger = setup_logger()
 
 def print_file_tree(start_path='.'):
     for root, dirs, files in os.walk(start_path):
@@ -70,9 +73,9 @@ class ClientHelper:
 
         try:
             fh.decode_file(chunks, output_path)
-            print(f"[info] file downloaded successfully: {output_path}")
+            logger.info(f"file downloaded successfully: {output_path}")
         except:
-            print(f"[error] failed to save downloaded file: {filename}")
+            logger.error(f"failed to save downloaded file: {filename}")
 
     def upload_file(self, filename: str) -> int:
         """
@@ -143,7 +146,7 @@ class Client:
             reader, writer = await asyncio.open_connection(ip, int(port))
             return reader, writer
         except ConnectionError:
-            print("[error] failed to connect to tracker")
+            logger.error("failed to connect to tracker")
             sys.exit(-1)
 
     async def connect_to_peer(self, ip, port, requests):
@@ -151,11 +154,11 @@ class Client:
         Connect to peer, send request payload and handle response
         """
         try:
-            print(f"[info] connecting to seeder at {ip}:{port}")
+            logger.info(f"connecting to seeder at {ip}:{port}")
             reader, writer = await asyncio.open_connection(ip, int(port))
-            print(f"[info] connected as leecher: {self.ip}:{self.port}")
+            logger.info(f"connected as leecher: {self.ip}:{self.port}")
         except ConnectionError:
-            print("[error] failed to connect to peer")
+            logger.error("failed to connect to peer")
             sys.exit(-1)
 
         await self.send_message(writer, requests)
@@ -170,30 +173,36 @@ class Client:
             peer_request = json.loads(data.decode())
             addr = writer.get_extra_info('peername')
 
-            print(f"[debug] received from {addr}: {peer_request}")
+            logger.debug(f"received from {addr}: {peer_request}")
             response = self.handle_peer_request(peer_request)
             payload = json.dumps(response)
-            print(f"[debug] sending response: {payload}")
+            logger.debug(f"sending response: {payload}")
             writer.write(payload.encode())
             await writer.drain()
-            print(f"[debug] closing connection to {addr}")
+            logger.debug(f"closing connection to {addr}")
         except:
-            print(f"[info] peer {writer.get_extra_info('peername')} disconnected")
+            logger.info(f"peer {writer.get_extra_info('peername')} disconnected")
         finally:
             writer.close()
 
     async def start_seeding(self):
-        """Start seeding server to handle peer requests"""
+        """Start seeding server to handle peer requests in background"""
         server = await asyncio.start_server(self.receive_peer_request, self.ip, self.port)
         if server is None:
             return
         addr = server.sockets[0].getsockname()
-        print(f'[info] seeding started on {addr}')
+        logger.info(f'Seeding started on {addr}')
+    
+        # Create background task for seeding
+        asyncio.create_task(self._run_seeding_server(server))
+    
+    async def _run_seeding_server(self, server):
+        """Run seeding server in background"""
         async with server:
             try:
                 await server.serve_forever()
-            except:
-                pass
+            except Exception as e:
+                logger.error(f"Seeding error: {str(e)}")
             finally:
                 server.close()
                 await server.wait_closed()
@@ -219,7 +228,7 @@ class Client:
         Encode and send message payload
         """
         json_payload = json.dumps(payload)
-        print(f"[debug] sending message: {json_payload}")
+        logger.debug(f"sending message: {json_payload}")
         writer.write(json_payload.encode())
         await writer.drain()
 
@@ -231,16 +240,16 @@ class Client:
         opcode = response[PayloadField.OPERATION_CODE]
 
         if ret == ReturnCode.FAIL:
-            print("[error] server request failed")
+            logger.error("server request failed")
             return -1
         elif ret == ReturnCode.ALREADY_SEEDING:
-            print("[error] already seeding a file")
+            logger.error("already seeding a file")
             return -1
         elif ret == ReturnCode.NO_AVAILABLE_TORRENTS:
-            print("[error] no torrents available")
+            logger.error("no torrents available")
             return -1
         elif ret == ReturnCode.TORRENT_DOES_NOT_EXIST:
-            print("[error] torrent id does not exist")
+            logger.error("torrent id does not exist")
             return -1
 
         if opcode == PeerServerOperation.GET_LIST:
