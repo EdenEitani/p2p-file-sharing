@@ -3,7 +3,7 @@ Handler module for user input and client setup.
 Provides command line interface for p2p file sharing client.
 """
 from client import Client
-from protocol import *
+from protocol import PeerServerOperation, ReturnCode, PayloadField
 import asyncio
 import sys
 import os
@@ -55,18 +55,17 @@ def get_user_choice():
     """Get and validate user menu choice"""
     while True:
         try:
-            # print_file_tree()
             choice = int(display_menu())
             if choice in range(1, 6):
                 if choice == 1:
-                    return [OPT_GET_LIST, None, None]
+                    return [PeerServerOperation.GET_LIST, None, None]
                 elif choice == 2:
                     torrent_id = int(input("Enter torrent ID: "))
-                    return [OPT_GET_TORRENT, torrent_id, None]
+                    return [PeerServerOperation.GET_TORRENT, torrent_id, None]
                 elif choice == 3:
                     filename = input("Enter filename: ")
                     filename = "input/image.jpg"
-                    return [OPT_UPLOAD_FILE, None, filename]
+                    return [PeerServerOperation.UPLOAD_FILE, None, filename]
                 elif choice == 4:
                     display_help()
                     return [0, None, None]
@@ -106,7 +105,6 @@ def parse_arguments():
     dest_ip = args[2] if arg_count == 4 else None
     dest_port = args[3] if arg_count == 4 else None
 
-    # Validate source IP and port
     if not validate_ip(src_ip):
         print("[error] invalid source IP address")
         return None, None, None, None
@@ -115,7 +113,6 @@ def parse_arguments():
         print("[error] invalid source port number")
         return None, None, None, None
 
-    # Validate destination IP and port if provided
     if arg_count == 4:
         if not validate_ip(dest_ip):
             print("[error] invalid tracker IP address")
@@ -151,7 +148,7 @@ async def handle_seeding_completion(client, reader, writer, dest_ip, dest_port, 
     """Handle the transition from downloading to seeding"""
     writer.close()
     reader, writer = await client.register_to_tracker(dest_ip, dest_port)
-    payload = client.create_server_request(opc=OPT_START_SEED, torrent_id=torrent_id)
+    payload = client.create_server_request(opc=PeerServerOperation.START_SEED, torrent_id=torrent_id)
     await client.send_message(writer, payload)
     result = await client.receive_message(reader)
     writer.close()
@@ -161,7 +158,7 @@ async def handle_seeding_termination(client, reader, writer, dest_ip, dest_port)
     """Handle cleanup when seeding is finished"""
     writer.close()
     reader, writer = await client.register_to_tracker(dest_ip, dest_port)
-    payload = client.create_server_request(opc=OPT_STOP_SEED, torrent_id=client.torrent_id)
+    payload = client.create_server_request(opc=PeerServerOperation.STOP_SEED, torrent_id=client.torrent_id)
     await client.send_message(writer, payload)
     result = await client.receive_message(reader)
     writer.close()
@@ -181,16 +178,16 @@ async def run_client_loop(client, dest_ip, dest_port):
         if should_continue:
             continue
 
-        if result == RET_FINISHED_DOWNLOAD:
+        if result == ReturnCode.FINISHED_DOWNLOAD:
             result = await handle_seeding_completion(
                 client, reader, writer, dest_ip, dest_port, operation[1]
             )
 
-        if result == RET_FINSH_SEEDING:
+        if result == ReturnCode.FINISHED_SEEDING:
             await handle_seeding_termination(client, reader, writer, dest_ip, dest_port)
             break
 
-        if result != RET_SUCCESS:
+        if result != ReturnCode.SUCCESS:
             writer.close()
 
 async def main():

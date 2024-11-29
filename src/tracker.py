@@ -1,186 +1,370 @@
+
 """
+
 Tracker server for p2p file sharing.
+
 Manages torrents and peer connections.
+
 """
+
 from torrent import Torrent
-from protocol import *
+
+from protocol import PeerServerOperation, ReturnCode, PayloadField, READ_SIZE
+
 import asyncio
+
 import json
+
 import sys
 
+
+
 class TrackerServer:
+
     def __init__(self):
+
         self.next_torrent_id = 0 
+
         self.torrents = {}  # Mapping of torrent_id to Torrent objects
 
+
+
     def handle_request(self, request) -> dict:
+
         """Handle incoming client request and return response"""
-        operation = request.get(OPC)
-        response = {OPC: operation}
+
+        operation = request.get(PayloadField.OPERATION_CODE)
+
+        response = {PayloadField.OPERATION_CODE: operation}
+
         
-        if operation == OPT_GET_LIST:
+
+        if operation == PeerServerOperation.GET_LIST:
+
             return self._handle_get_list()
-        elif operation == OPT_GET_TORRENT:
+
+        elif operation == PeerServerOperation.GET_TORRENT:
+
             return self._handle_get_torrent(request)
-        elif operation == OPT_START_SEED:
+
+        elif operation == PeerServerOperation.START_SEED:
+
             return self._handle_start_seed(request)
-        elif operation == OPT_STOP_SEED:
+
+        elif operation == PeerServerOperation.STOP_SEED:
+
             return self._handle_stop_seed(request)
-        elif operation == OPT_UPLOAD_FILE:
+
+        elif operation == PeerServerOperation.UPLOAD_FILE:
+
             return self._handle_upload_file(request)
+
         else:
-            return {OPC: operation, RET: RET_FAIL}
+
+            return {PayloadField.OPERATION_CODE: operation, PayloadField.RETURN_CODE: ReturnCode.FAIL}
+
+
 
     def _handle_get_list(self) -> dict:
+
         """Handle request for list of available torrents"""
+
         torrent_list = self.get_torrent_list()
+
         if torrent_list:
+
             return {
-                OPC: OPT_GET_LIST,
-                TORRENT_LIST: torrent_list,
-                RET: RET_SUCCESS
+
+                PayloadField.OPERATION_CODE: PeerServerOperation.GET_LIST,
+
+                PayloadField.TORRENT_LIST: torrent_list,
+
+                PayloadField.RETURN_CODE: ReturnCode.SUCCESS
+
             }
+
         return {
-            OPC: OPT_GET_LIST,
-            RET: RET_NO_AVAILABLE_TORRENTS
+
+            PayloadField.OPERATION_CODE: PeerServerOperation.GET_LIST,
+
+            PayloadField.RETURN_CODE: ReturnCode.NO_AVAILABLE_TORRENTS
+
         }
+
+
 
     def _handle_get_torrent(self, request) -> dict:
+
         """Handle request for specific torrent"""
-        if request[TID] not in self.torrents:
+
+        if request[PayloadField.TORRENT_ID] not in self.torrents:
+
             return {
-                OPC: OPT_GET_TORRENT,
-                RET: RET_TORRENT_DOES_NOT_EXIST
+
+                PayloadField.OPERATION_CODE: PeerServerOperation.GET_TORRENT,
+
+                PayloadField.RETURN_CODE: ReturnCode.TORRENT_DOES_NOT_EXIST
+
             }
+
         
+
         torrent_data = self.get_torrent_data(request)
+
         return {
-            OPC: OPT_GET_TORRENT,
-            TORRENT: torrent_data,
-            RET: RET_SUCCESS
+
+            PayloadField.OPERATION_CODE: PeerServerOperation.GET_TORRENT,
+
+            PayloadField.TORRENT_OBJ: torrent_data,
+
+            PayloadField.RETURN_CODE: ReturnCode.SUCCESS
+
         }
+
+
 
     def _handle_start_seed(self, request) -> dict:
+
         """Handle request to start seeding"""
+
         status = self.update_peer_status(request)
+
         return {
-            OPC: OPT_START_SEED,
-            RET: status,
-            TID: request[TID]
+
+            PayloadField.OPERATION_CODE: PeerServerOperation.START_SEED,
+
+            PayloadField.RETURN_CODE: status,
+
+            PayloadField.TORRENT_ID: request[PayloadField.TORRENT_ID]
+
         }
+
+
 
     def _handle_stop_seed(self, request) -> dict:
+
         """Handle request to stop seeding"""
+
         status = self.stop_seeding(request)
+
         return {
-            OPC: OPT_STOP_SEED,
-            RET: status
+
+            PayloadField.OPERATION_CODE: PeerServerOperation.STOP_SEED,
+
+            PayloadField.RETURN_CODE: status
+
         }
+
+
 
     def _handle_upload_file(self, request) -> dict:
+
         """Handle request to upload new file"""
+
         status, torrent_id = self.add_new_file(request)
+
         return {
-            OPC: OPT_UPLOAD_FILE,
-            RET: status,
-            TID: torrent_id
+
+            PayloadField.OPERATION_CODE: PeerServerOperation.UPLOAD_FILE,
+
+            PayloadField.RETURN_CODE: status,
+
+            PayloadField.TORRENT_ID: torrent_id
+
         }
+
+
 
     def get_torrent_list(self) -> list:
+
         """Get list of all available torrents"""
+
         return [{
-            TID: torrent.id,
-            FILE_NAME: torrent.filename,
-            TOTAL_CHUNKS: torrent.num_of_chunks,
-            SEEDER_LIST: torrent.get_seeders(),
-            LEECHER_LIST: torrent.get_leechers()
+
+            PayloadField.TORRENT_ID: torrent.id,
+
+            PayloadField.FILE_NAME: torrent.filename,
+
+            PayloadField.NUM_OF_CHUNKS: torrent.num_of_chunks,
+
+            PayloadField.SEEDER_LIST: torrent.get_seeders(),
+
+            PayloadField.LEECHER_LIST: torrent.get_leechers()
+
         } for torrent in self.torrents.values()]
 
+
+
     def get_torrent_data(self, request: dict) -> dict:
+
         """Get detailed data for specific torrent"""
-        torrent = self.torrents[request[TID]]
-        torrent.add_leecher(request[PID], request[IP], request[PORT])
+
+        torrent = self.torrents[request[PayloadField.TORRENT_ID]]
+
+        torrent.add_leecher(request[PayloadField.PEER_ID], request[PayloadField.IP_ADDRESS], request[PayloadField.PORT])
+
         
+
         return {
-            TID: torrent.id,
-            FILE_NAME: torrent.filename,
-            TOTAL_CHUNKS: torrent.num_of_chunks,
-            SEEDER_LIST: torrent.get_seeders(),
-            LEECHER_LIST: torrent.get_leechers()
+
+            PayloadField.TORRENT_ID: torrent.id,
+
+            PayloadField.FILE_NAME: torrent.filename,
+
+            PayloadField.NUM_OF_CHUNKS: torrent.num_of_chunks,
+
+            PayloadField.SEEDER_LIST: torrent.get_seeders(),
+
+            PayloadField.LEECHER_LIST: torrent.get_leechers()
+
         }
 
+
+
     def update_peer_status(self, request: dict) -> int:
+
         """Update peer status to seeder"""
-        if request[TID] not in self.torrents:
-            return RET_FAIL
+
+        if request[PayloadField.TORRENT_ID] not in self.torrents:
+
+            return ReturnCode.FAIL
+
         
-        torrent = self.torrents[request[TID]]
-        torrent.add_seeder(request[PID], request[IP], request[PORT])
-        torrent.remove_leecher(request[PID])
-        return RET_SUCCESS
+
+        torrent = self.torrents[request[PayloadField.TORRENT_ID]]
+
+        torrent.add_seeder(request[PayloadField.PEER_ID], request[PayloadField.IP_ADDRESS], request[PayloadField.PORT])
+
+        torrent.remove_leecher(request[PayloadField.PEER_ID])
+
+        return ReturnCode.SUCCESS
+
+
 
     def stop_seeding(self, request: dict) -> int:
-        """Remove peer from seeders list"""
-        if request[TID] not in self.torrents:
-            return RET_FAIL
 
-        peer_id = request[PID]
+        """Remove peer from seeders list"""
+
+        if request[PayloadField.TORRENT_ID] not in self.torrents:
+
+            return ReturnCode.FAIL
+
+
+
+        peer_id = request[PayloadField.PEER_ID]
+
         if not peer_id:
-            return RET_FAIL
+
+            return ReturnCode.FAIL
+
+
 
         print(f"[info] removing seeder: {peer_id}")
-        self.torrents[request[TID]].remove_seeder(peer_id)
-        self.check_seeders(request[TID])
-        return RET_SUCCESS
+
+        self.torrents[request[PayloadField.TORRENT_ID]].remove_seeder(peer_id)
+
+        self.check_seeders(request[PayloadField.TORRENT_ID])
+
+        return ReturnCode.SUCCESS
+
+
 
     def check_seeders(self, torrent_id):
+
         """Remove torrent if it has no seeders"""
+
         if len(self.torrents[torrent_id].seeders) == 0:
+
             self.torrents.pop(torrent_id)
+
             self.next_torrent_id -= 1
+
             print(f"[info] removed torrent {torrent_id} (no seeders)")
 
+
+
     def add_new_file(self, request: dict) -> tuple[int, int]:
+
         """Add new file as torrent"""
+
         # Check if peer is already seeding
+
         for torrent in self.torrents.values():
-            if request[PID] in torrent.get_seeders():
-                return RET_ALREADY_SEEDING, -1
+
+            if request[PayloadField.PEER_ID] in torrent.get_seeders():
+
+                return ReturnCode.ALREADY_SEEDING, -1
+
+
 
         # Create new torrent
+
         new_torrent = Torrent(
+
             self.next_torrent_id,
-            request[FILE_NAME],
-            request[TOTAL_CHUNKS]
+
+            request[PayloadField.FILE_NAME],
+
+            request[PayloadField.NUM_OF_CHUNKS]
+
         )
-        new_torrent.add_seeder(request[PID], request[IP], request[PORT])
+
+        new_torrent.add_seeder(request[PayloadField.PEER_ID], request[PayloadField.IP_ADDRESS], request[PayloadField.PORT])
+
         
+
         # Add to torrents list
+
         self.torrents[self.next_torrent_id] = new_torrent
+
         self.next_torrent_id += 1
+
         
-        return RET_SUCCESS, new_torrent.id
+
+        return ReturnCode.SUCCESS, new_torrent.id
+
+
 
     async def receive_request(self, reader, writer):
+
         """Handle incoming connection and request"""
+
         try:
+
             data = await reader.read(READ_SIZE)
+
             request = json.loads(data.decode())
+
             addr = writer.get_extra_info('peername')
 
+
+
             print(f"[debug] received request from {addr}: {request}")
+
             
+
             response = self.handle_request(request)
+
             payload = json.dumps(response)
+
             
+
             print(f"[debug] sending response: {payload}")
+
             writer.write(payload.encode())
+
             await writer.drain()
 
+
+
         except Exception as e:
+
             print(f"[error] {str(e)}")
+
             print(f"[info] peer disconnected: {writer.get_extra_info('peername')}")
+
         finally:
+
             writer.close()
 
 def validate_port(port: str) -> bool:
