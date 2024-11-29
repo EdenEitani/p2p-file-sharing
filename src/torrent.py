@@ -33,3 +33,6 @@ class Torrent:
     
     def get_leechers(self) -> dict:
         return self.leechers
+    
+    def get_filename(self):
+        return self.filename

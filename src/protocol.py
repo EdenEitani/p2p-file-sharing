@@ -29,8 +29,8 @@ class ReturnCode(IntEnum):
 
 class PayloadField(str, Enum):
     """Payload field names"""
-    OPERATION_CODE = 'OPC'
-    RETURN_CODE = 'RET'
+    OPERATION_CODE = 'OP_CODE'
+    RETURN_CODE = 'RET_CODE'
     IP_ADDRESS = 'IP_ADDRESS'
     PORT = 'PORT'
     PEER_ID = 'PEER_ID'
@@ -38,8 +38,8 @@ class PayloadField(str, Enum):
     FILE_NAME = 'FILE_NAME'
     NUM_OF_CHUNKS = 'NUM_OF_CHUNKS'
     TORRENT_LIST = 'TORRENT_LIST'
-    TORRENT_OBJ = 'TORRENT_OBJ'
-    CHUNK_IDX = 'CHUNK_IDX'
+    TORRENT_OBJECT = 'TORRENT_OBJECT'
+    CHUNK_IDX = 'CHUNK_INDX'
     CHUNK_DATA = 'CHUNK_DATA'
     PEER_LIST = 'PEER_LIST'
     SEEDER_LIST = 'SEEDER_LIST'

@@ -59,7 +59,7 @@ class TrackerServer:
         torrent_data = self.get_torrent_data(request)
         return {
             PayloadField.OPERATION_CODE: PeerServerOperation.GET_TORRENT,
-            PayloadField.TORRENT_OBJ: torrent_data,
+            PayloadField.TORRENT_OBJECT: torrent_data,
             PayloadField.RETURN_CODE: ReturnCode.SUCCESS
         }
 
@@ -147,6 +147,8 @@ class TrackerServer:
         """Add new file as torrent"""
         # Check if peer is already seeding
         for torrent in self.torrents.values():
+            if request[PayloadField.FILE_NAME] in torrent.get_filename():
+                return self.update_peer_status(request)
             if request[PayloadField.PEER_ID] in torrent.get_seeders():
                 return ReturnCode.ALREADY_SEEDING, -1
 

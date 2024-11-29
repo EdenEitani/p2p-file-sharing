@@ -63,11 +63,11 @@ def get_user_choice():
                 if choice == 1:
                     return [PeerServerOperation.GET_LIST, None, None]
                 elif choice == 2:
-                    torrent_id = int(input("Enter torrent ID: "))
+                    torrent_id = int(input("Enter torrent ID: ").strip())
                     return [PeerServerOperation.GET_TORRENT, torrent_id, None]
                 elif choice == 3:
-                    filename = input("Enter filename: ")
-                    filename = "input/image.jpg"
+                    filename = input("Enter filename: ").strip()
+                    filename = "input/sample.txt"
                     return [PeerServerOperation.UPLOAD_FILE, None, filename]
                 elif choice == 4:
                     display_help()
