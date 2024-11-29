@@ -6,6 +6,7 @@ import asyncio
 import sys
 import json
 from socket import *
+import threading
 from protocol import PeerOperation, PeerServerOperation, ReturnCode, PayloadField, READ_SIZE
 from chunk import *
 import file_handler as fh
@@ -82,14 +83,14 @@ class ClientHelper:
         Prepare file for seeding by splitting into chunks
         """
         try:
-            print(f"[info:] uploading file as seeder {filename}")
+            logger.info(f"uploading file as seeder {filename}")
             chunks_size, chunks = fh.encode_file(filename)
             self.client.chunk_buffer.set_buffer(chunks_size)
             for idx, chunk_data in enumerate(chunks):
                 self.client.chunk_buffer.add_data(Chunk(idx, chunk_data))
             return chunks_size
         except Exception as e:
-            print(f"[error:{e}] failed to read file: '{filename}'")
+            logger.error(f"{e} failed to read file: '{filename}'")
             return 0
 
     def strip_filename(self, filename: str) -> str:
@@ -186,36 +187,39 @@ class Client:
             writer.close()
 
     async def start_seeding(self):
-        """Start seeding server to handle peer requests in background"""
-        server = await asyncio.start_server(self.receive_peer_request, self.ip, self.port)
-        if server is None:
-            return
-        addr = server.sockets[0].getsockname()
-        logger.info(f'Seeding started on {addr}')
-    
-        # Create background task for seeding
-        asyncio.create_task(self._run_seeding_server(server))
-    
-    async def _run_seeding_server(self, server):
-        """Run seeding server in background"""
-        async with server:
-            try:
-                await server.serve_forever()
-            except Exception as e:
-                logger.error(f"Seeding error: {str(e)}")
-            finally:
-                server.close()
-                await server.wait_closed()
+        """Start seeding server to handle peer requests"""
+        addr = (self.ip, int(self.port))
+        logger.info(f'Starting seeding server on {addr}')
+        
+        # Start server in a new thread
+        thread = threading.Thread(target=self._run_seeding_thread, args=(addr,))
+        thread.daemon = True  # Thread will exit when main program exits
+        thread.start()
+        
+    def _run_seeding_thread(self, addr):
+        """Run seeding server in a separate thread"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            server = loop.run_until_complete(
+                asyncio.start_server(self.receive_peer_request, addr[0], addr[1], loop=loop)
+            )
+            logger.info(f'Seeding started on {server.sockets[0].getsockname()}')
+            loop.run_forever()
+        except Exception as e:
+            logger.error(f"Seeding error: {str(e)}")
+        finally:
+            loop.close()
 
     async def receive_message(self, reader):
         """
         Receive and decode messages, route to appropriate handler
         """
-        print("RECEIVED")
+        logger.debug("Reading message")
         data = await reader.read(READ_SIZE)
-        print("AFTER READ")
         payload = json.loads(data.decode())
-        print(f'[debug] received message: {payload}')
+        logger.debug(f'Received message: {payload}')
         opcode = payload[PayloadField.OPERATION_CODE]
         if opcode > 9:
             res = await self.handle_server_response(payload)
@@ -257,7 +261,7 @@ class Client:
             return ReturnCode.SUCCESS
             
         elif opcode == PeerServerOperation.GET_TORRENT:
-            torrent = response[PayloadField.TORRENT_OBJ]
+            torrent = response[PayloadField.TORRENT_OBJECT]
             self.state.leeching = True
             self.seeder_list = torrent[PayloadField.SEEDER_LIST]
             self.chunk_buffer.set_buffer(torrent[PayloadField.NUM_OF_CHUNKS])
@@ -269,7 +273,7 @@ class Client:
             self.state.seeding = True
             self.torrent_id = response[PayloadField.TORRENT_ID]
             await self.start_seeding()
-            return ReturnCode.FINISHED_SEEDING
+            return ReturnCode.SUCCESS
             
         elif opcode == PeerServerOperation.STOP_SEED:
             self.state.seeding = False
