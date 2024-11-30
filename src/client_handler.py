@@ -67,7 +67,7 @@ def get_user_choice():
                     return [PeerServerOperation.GET_TORRENT, torrent_id, None]
                 elif choice == 3:
                     filename = input("Enter filename: ").strip()
-                    filename = "input/sample.txt"
+                    filename = "input/image.jpg"
                     return [PeerServerOperation.UPLOAD_FILE, None, filename]
                 elif choice == 4:
                     display_help()
@@ -151,6 +151,7 @@ async def handle_seeding_completion(client, reader, writer, dest_ip, dest_port, 
     """Handle the transition from downloading to seeding"""
     writer.close()
     reader, writer = await client.register_to_tracker(dest_ip, dest_port)
+    logger.debug("Starting to seed after download completed")
     payload = client.create_server_request(opcode=PeerServerOperation.START_SEED, torrent_id=torrent_id)
     await client.send_message(writer, payload)
     result = await client.receive_message(reader)

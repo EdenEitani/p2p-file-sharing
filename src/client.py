@@ -109,13 +109,39 @@ class ClientHelper:
         """
         Display formatted list of available torrents
         """
-        print("\n" + "="*100 + "\n")
-        print("TID\tFILE_NAME\tTOTAL_CHUNKS\tSEEDERS")
-        print("-"*100)
+        id_width = 6
+        name_width = 20
+        chunks_width = 15
+        peers_width = 50
+
+        print("\n" + "=" * 120)
+        headers = [
+            "ID".ljust(id_width),
+            "File Name".ljust(name_width),
+            "Chunks".ljust(chunks_width),
+            "Seeders".ljust(peers_width),
+            "Leechers"
+        ]
+        print("  ".join(headers))
+        print("-" * 120)
+
         for torrent in torrent_list:
-            print(f"{torrent[PayloadField.TORRENT_ID]}\t{torrent[PayloadField.FILE_NAME]}\t" + 
-                  f"{torrent[PayloadField.NUM_OF_CHUNKS]}\t\t{torrent[PayloadField.SEEDER_LIST]}\n")
-        print("\n" + "="*100 + "\n")
+            seeders = [f"{client_id}@{info['IP_ADDRESS']}:{info['PORT']}" 
+                    for client_id, info in torrent[PayloadField.SEEDER_LIST].items()]
+            leechers = [f"{client_id}@{info['IP_ADDRESS']}:{info['PORT']}" 
+                    for client_id, info in torrent[PayloadField.LEECHER_LIST].items()]
+            
+            row = [
+                str(torrent[PayloadField.TORRENT_ID]).ljust(id_width),
+                torrent[PayloadField.FILE_NAME][:name_width-3].ljust(name_width),
+                str(torrent[PayloadField.NUM_OF_CHUNKS]).ljust(chunks_width),
+                (", ".join(seeders) or "None")[:peers_width].ljust(peers_width),
+                (", ".join(leechers) or "None")
+            ]
+            print("  ".join(row))
+
+        print("=" * 120 + "\n")
+
 
 class Client:
     """
@@ -216,16 +242,26 @@ class Client:
         """
         Receive and decode messages, route to appropriate handler
         """
-        logger.debug("Reading message")
-        data = await reader.read(READ_SIZE)
-        payload = json.loads(data.decode())
-        logger.debug(f'Received message: {payload}')
-        opcode = payload[PayloadField.OPERATION_CODE]
-        if opcode > 9:
-            res = await self.handle_server_response(payload)
-        else:
-            res = self.handle_peer_response(payload)
-        return res
+        try:
+            logger.debug("Reading message")
+            data = await reader.read(READ_SIZE)
+            try:
+                payload = json.loads(data.decode())
+                logger.debug(f'Received message: {payload}')
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON decode error: {str(e)}")
+                logger.error(f"Raw data received: {data.decode()}")
+                return ReturnCode.FAIL
+                
+            opcode = payload[PayloadField.OPERATION_CODE]
+            if opcode > 9:
+                res = await self.handle_server_response(payload)
+            else:
+                res = self.handle_peer_response(payload)
+            return res
+        except Exception as e:
+            logger.error(f"Error in receive_message: {str(e)}")
+            return ReturnCode.FAIL
 
     async def send_message(self, writer, payload: dict):
         """
