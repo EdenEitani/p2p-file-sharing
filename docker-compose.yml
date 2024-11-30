@@ -28,7 +28,6 @@ services:
     networks:
       p2p_network:
         ipv4_address: 172.20.0.3
-    # These flags enable input
     stdin_open: true
     tty: true
 

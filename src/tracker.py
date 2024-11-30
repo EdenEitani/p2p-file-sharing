@@ -14,7 +14,7 @@ logger = setup_logger()
 class TrackerServer:
     def __init__(self):
         self.next_torrent_id = 0 
-        self.torrents = {}  # Mapping of torrent_id to Torrent objects
+        self.torrents = {} # {torrentId: Torrent}
 
     def handle_request(self, request) -> dict:
         """Handle incoming client request and return response"""
@@ -66,6 +66,7 @@ class TrackerServer:
     def _handle_start_seed(self, request) -> dict:
         """Handle request to start seeding"""
         status = self.update_peer_status(request)
+        logger.debug(f"update peer status returned: {status}")
         return {
             PayloadField.OPERATION_CODE: PeerServerOperation.START_SEED,
             PayloadField.RETURN_CODE: status,
@@ -114,12 +115,16 @@ class TrackerServer:
 
     def update_peer_status(self, request: dict) -> int:
         """Update peer status to seeder"""
+        logger.debug(f"update_peer_status: {request}")
+        logger.debug(f"update_peer_status: {self.torrents}")
         if request[PayloadField.TORRENT_ID] not in self.torrents:
             return ReturnCode.FAIL
         
         torrent = self.torrents[request[PayloadField.TORRENT_ID]]
+        logger.debug(f"Adding new seeder to torrent: {torrent}")
         torrent.add_seeder(request[PayloadField.PEER_ID], request[PayloadField.IP_ADDRESS], request[PayloadField.PORT])
         torrent.remove_leecher(request[PayloadField.PEER_ID])
+        logger.debug(f"updated torrent: {torrent}")
         return ReturnCode.SUCCESS
 
     def stop_seeding(self, request: dict) -> int:
@@ -152,7 +157,6 @@ class TrackerServer:
             if request[PayloadField.PEER_ID] in torrent.get_seeders():
                 return ReturnCode.ALREADY_SEEDING, -1
 
-        # Create new torrent
         new_torrent = Torrent(
             self.next_torrent_id,
             request[PayloadField.FILE_NAME],

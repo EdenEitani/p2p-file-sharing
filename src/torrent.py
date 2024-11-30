@@ -26,7 +26,7 @@ class Torrent:
 
     def remove_leecher(self, id: str):
         if id in self.leechers:
-            del self.seeders[id]
+            del self.leechers[id]
 
     def get_seeders(self) -> dict:
         return self.seeders
@@ -36,3 +36,7 @@ class Torrent:
     
     def get_filename(self):
         return self.filename
+    
+    def __repr__(self):
+        return f"Torrent(id={self.id}, filename={self.filename}, num_of_chunks={self.num_of_chunks}, "\
+               f"seeders={self.seeders}, leechers={self.leechers})"
