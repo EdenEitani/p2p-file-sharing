@@ -16,15 +16,6 @@ from logger import setup_logger
 
 logger = setup_logger()
 
-def print_file_tree(start_path='.'):
-    for root, dirs, files in os.walk(start_path):
-        level = root.replace(start_path, '').count(os.sep)
-        indent = ' ' * 4 * level
-        print(f"{indent}{os.path.basename(root)}/")
-        sub_indent = ' ' * 4 * (level + 1)
-        for f in files:
-            print(f"{sub_indent}{f}")
-
 class State:
     def __init__(self):
         self.seeding = False
@@ -38,35 +29,67 @@ class ClientHelper:
     """
     def __init__(self, client):
         self.client = client
-
-    async def distribute_chunks_evenly(self, num_chunks: int):
+        
+    async def distribute_chunks_evenly(self, num_chunks: int, max_retries=3, retry_delay=1):
         """
-        Distribute chunk requests evenly among available peers
+        Distribute chunk requests evenly among available peers with retry mechanism
+        
+        Args:
+            num_chunks: Total number of chunks to download
+            max_retries: Maximum number of retry attempts per chunk
+            retry_delay: Delay between retries in seconds
         """
-        print("distribute_chunks_evenly")
+        logger.info(f"Starting distribution of {num_chunks} chunks")
         num_peers = len(self.client.seeder_list)
         peer_list = list(self.client.seeder_list.values())
-        request_list = [self.client.create_peer_request(PeerOperation.GET_CHUNK, i) for i in range(num_chunks)]
+        failed_chunks = set(range(num_chunks))  # Track chunks that need downloading
+        retry_count = 0
+
+        while failed_chunks and retry_count < max_retries:
+            if retry_count > 0:
+                logger.info(f"Retry attempt {retry_count} for chunks: {failed_chunks}")
+                await asyncio.sleep(retry_delay)
+
+            # Try to download each missing chunk
+            for chunk_idx in list(failed_chunks):  # Convert to list to allow set modification
+                curr_peer = chunk_idx % num_peers
+                request = self.client.create_peer_request(PeerOperation.GET_CHUNK, chunk_idx)
+                
+                try:
+                    result = await self.client.connect_to_peer(
+                        peer_list[curr_peer][PayloadField.IP_ADDRESS],
+                        peer_list[curr_peer][PayloadField.PORT],
+                        request
+                    )
+                    
+                    if result == ReturnCode.SUCCESS and self.client.chunk_buffer.has_chunk(chunk_idx):
+                        failed_chunks.remove(chunk_idx)
+                        logger.info(f"Successfully downloaded chunk {chunk_idx} from peer {curr_peer}")
+                    else:
+                        logger.error(f"Failed to download chunk {chunk_idx} from peer {curr_peer}")
+                except Exception as e:
+                    logger.error(f"Error downloading chunk {chunk_idx}: {str(e)}")
+
+            retry_count += 1
+
+        if failed_chunks:
+            missing = len(failed_chunks)
+            total = num_chunks
+            logger.error(f"Failed to download {missing}/{total} chunks after {max_retries} retries")
+            logger.error(f"Missing chunks: {failed_chunks}")
+            return False
         
-        curr_chunk = 0
-        while curr_chunk < num_chunks:
-            curr_peer = curr_chunk % num_peers
-            await self.client.connect_to_peer(
-                peer_list[curr_peer][PayloadField.IP_ADDRESS],
-                peer_list[curr_peer][PayloadField.PORT],
-                request_list[curr_chunk]
-            )
-            curr_chunk += 1
+        logger.info("All chunks downloaded successfully")
+        return True
 
     async def download_file(self, num_chunks: int, filename: str):
         """
         Download file chunks and save to output directory
         """
-        await self.distribute_chunks_evenly(num_chunks)
+        if not await self.distribute_chunks_evenly(num_chunks):
+            logger.error("Failed to download all chunks")
+            return False
 
-        while not self.client.chunk_buffer.has_all_chunks:
-            continue
-        
         chunks = []
         output_path = f'output/{self.client.id}_{filename}'
         for i in range(self.client.chunk_buffer.get_size()):
@@ -74,9 +97,11 @@ class ClientHelper:
 
         try:
             fh.decode_file(chunks, output_path)
-            logger.info(f"file downloaded successfully: {output_path}")
-        except:
-            logger.error(f"failed to save downloaded file: {filename}")
+            logger.info(f"File downloaded successfully: {output_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save downloaded file {filename}: {str(e)}")
+            return False
 
     def upload_file(self, filename: str) -> int:
         """
@@ -107,41 +132,60 @@ class ClientHelper:
 
     def display_torrent_list(self, torrent_list):
         """
-        Display formatted list of available torrents
+        Display formatted list of available torrents with detailed peer information
         """
         id_width = 6
         name_width = 20
         chunks_width = 15
-        peers_width = 50
+        label_width = 10
 
         print("\n" + "=" * 120)
+        # Main header
         headers = [
             "ID".ljust(id_width),
             "File Name".ljust(name_width),
             "Chunks".ljust(chunks_width),
-            "Seeders".ljust(peers_width),
-            "Leechers"
+            "Peers"
         ]
         print("  ".join(headers))
         print("-" * 120)
 
         for torrent in torrent_list:
-            seeders = [f"{client_id}@{info['IP_ADDRESS']}:{info['PORT']}" 
-                    for client_id, info in torrent[PayloadField.SEEDER_LIST].items()]
-            leechers = [f"{client_id}@{info['IP_ADDRESS']}:{info['PORT']}" 
-                    for client_id, info in torrent[PayloadField.LEECHER_LIST].items()]
-            
-            row = [
+            # Print basic torrent info
+            base_info = [
                 str(torrent[PayloadField.TORRENT_ID]).ljust(id_width),
                 torrent[PayloadField.FILE_NAME][:name_width-3].ljust(name_width),
                 str(torrent[PayloadField.NUM_OF_CHUNKS]).ljust(chunks_width),
-                (", ".join(seeders) or "None")[:peers_width].ljust(peers_width),
-                (", ".join(leechers) or "None")
+                ""  # Empty space for alignment
             ]
-            print("  ".join(row))
+            print("  ".join(base_info))
+
+            # Print seeders
+            seeders = [f"{client_id}@{info['IP_ADDRESS']}:{info['PORT']}" 
+                    for client_id, info in torrent[PayloadField.SEEDER_LIST].items()]
+            if seeders:
+                print(f"{' ' * (id_width + name_width + chunks_width + 4)}{'Seeders:'.ljust(label_width)}", end="")
+                for seeder in seeders:
+                    print(seeder)
+                    if seeder != seeders[-1]:  # If not last seeder
+                        print(f"{' ' * (id_width + name_width + chunks_width + label_width + 4)}", end="")
+
+            # Print leechers
+            leechers = [f"{client_id}@{info['IP_ADDRESS']}:{info['PORT']}" 
+                    for client_id, info in torrent[PayloadField.LEECHER_LIST].items()]
+            if leechers:
+                print(f"{' ' * (id_width + name_width + chunks_width + 4)}{'Leechers:'.ljust(label_width)}", end="")
+                for leecher in leechers:
+                    print(leecher)
+                    if leecher != leechers[-1]:  # If not last leecher
+                        print(f"{' ' * (id_width + name_width + chunks_width + label_width + 4)}", end="")
+            
+            if not seeders and not leechers:
+                print(f"{' ' * (id_width + name_width + chunks_width + 4)}No peers conßnected")
+            
+            print("-" * 120)  # Separator between torrents
 
         print("=" * 120 + "\n")
-
 
 class Client:
     """
@@ -159,6 +203,12 @@ class Client:
     @staticmethod
     def generate_id(ip: str, port: str) -> str:
         return hashlib.md5((ip + port).encode()).hexdigest()
+    
+    def get_state(self):
+        return self.state
+    
+    def is_seeding(self):
+        return self.state.seeding == True
     
     async def register_to_tracker(self, ip, port):
         """
@@ -192,6 +242,19 @@ class Client:
         res = await self.receive_message(reader)
         writer.close()
         return res
+    
+    def _filter_payload(self, payload):
+        """
+        Don't print whole chunk_data
+        """
+        if (type(payload) == str):
+            return payload
+        filtered_payload = payload
+        if PayloadField.CHUNK_DATA in filtered_payload:
+            chunk_data = filtered_payload[PayloadField.CHUNK_DATA]
+            filtered_payload[PayloadField.CHUNK_DATA] = f"{chunk_data[:20]}..." if chunk_data else "None"
+        return filtered_payload
+
 
     async def receive_peer_request(self, reader, writer):
         """Handle incoming peer requests and send response"""
@@ -203,7 +266,7 @@ class Client:
             logger.debug(f"received from {addr}: {peer_request}")
             response = self.handle_peer_request(peer_request)
             payload = json.dumps(response)
-            logger.debug(f"sending response: {payload}")
+            logger.debug(f"sending response: {self._filter_payload(payload)}")
             writer.write(payload.encode())
             await writer.drain()
             logger.debug(f"closing connection to {addr}")
@@ -245,13 +308,33 @@ class Client:
         try:
             logger.debug("Reading message")
             data = await reader.read(READ_SIZE)
+            
+            # Handle empty data
+            if not data:
+                logger.error("Received empty data")
+                return ReturnCode.FAIL
+                
             try:
                 payload = json.loads(data.decode())
-                logger.debug(f'Received message: {payload}')
+                logger.debug(f'Received message: {self._filter_payload(payload)}')
             except json.JSONDecodeError as e:
                 logger.error(f"JSON decode error: {str(e)}")
                 logger.error(f"Raw data received: {data.decode()}")
-                return ReturnCode.FAIL
+                
+                # Add retry logic for empty/invalid responses
+                for _ in range(3):  # Try 3 times
+                    logger.info("Retrying read...")
+                    await asyncio.sleep(0.5)  # Wait before retry
+                    data = await reader.read(READ_SIZE)
+                    if data:
+                        try:
+                            payload = json.loads(data.decode())
+                            logger.debug(f'Received message on retry: {payload}')
+                            break
+                        except json.JSONDecodeError:
+                            continue
+                else:  # If all retries failed
+                    return ReturnCode.FAIL
                 
             opcode = payload[PayloadField.OPERATION_CODE]
             if opcode > 9:
