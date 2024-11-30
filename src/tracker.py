@@ -115,8 +115,6 @@ class TrackerServer:
 
     def update_peer_status(self, request: dict) -> int:
         """Update peer status to seeder"""
-        logger.debug(f"update_peer_status: {request}")
-        logger.debug(f"update_peer_status: {self.torrents}")
         if request[PayloadField.TORRENT_ID] not in self.torrents:
             return ReturnCode.FAIL
         
@@ -124,7 +122,6 @@ class TrackerServer:
         logger.debug(f"Adding new seeder to torrent: {torrent}")
         torrent.add_seeder(request[PayloadField.PEER_ID], request[PayloadField.IP_ADDRESS], request[PayloadField.PORT])
         torrent.remove_leecher(request[PayloadField.PEER_ID])
-        logger.debug(f"updated torrent: {torrent}")
         return ReturnCode.SUCCESS
 
     def stop_seeding(self, request: dict) -> int:
@@ -181,7 +178,6 @@ class TrackerServer:
             
             response = self.handle_request(request)
             payload = json.dumps(response)
-            
             logger.debug(f"sending response: {payload}")
             writer.write(payload.encode())
             await writer.drain()
