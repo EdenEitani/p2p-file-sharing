@@ -313,7 +313,7 @@ class Client:
                     return ReturnCode.FAIL
                 
             opcode = payload[PayloadField.OPERATION_CODE]
-            if opcode > 9:
+            if opcode in PeerServerOperation._value2member_map_:
                 res = await self.handle_server_response(payload)
             else:
                 res = self.handle_peer_response(payload)
@@ -360,8 +360,11 @@ class Client:
             self.state.leeching = True
             self.seeder_list = torrent[PayloadField.SEEDER_LIST]
             self.chunk_buffer.set_buffer(torrent[PayloadField.NUM_OF_CHUNKS])
-            await self.helper.download_file(torrent[PayloadField.NUM_OF_CHUNKS], torrent[PayloadField.FILE_NAME])
-            return ReturnCode.FINISHED_DOWNLOAD    
+            result = await self.helper.download_file(torrent[PayloadField.NUM_OF_CHUNKS], torrent[PayloadField.FILE_NAME])
+            if result:
+                return ReturnCode.FINISHED_DOWNLOAD
+            else:
+                return ReturnCode.FAILED_TO_DOWNLOAD
             
         elif opcode == PeerServerOperation.START_SEED or opcode == PeerServerOperation.UPLOAD_FILE:
             self.state.leeching = False

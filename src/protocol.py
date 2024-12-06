@@ -32,6 +32,7 @@ class ReturnCode(IntEnum):
     NO_AVAILABLE_TORRENTS = 410
     TORRENT_DOES_NOT_EXIST = 411
     FAIL = 450
+    FAILED_TO_DOWNLOAD = 451
 
 class PayloadField(str, Enum):
     """Payload field names"""
