@@ -1,6 +1,7 @@
 from enum import IntEnum, auto, Enum
 
 class PeerServerOperation(IntEnum):
+    """Operations between peer and server"""
     GET_LIST = 100
     GET_TORRENT = 110
     START_SEED = 120
@@ -8,6 +9,7 @@ class PeerServerOperation(IntEnum):
     UPLOAD_FILE = 140
 
 class PeerOperation(IntEnum):
+    """Operations between peers"""
     STATUS_INTERESTED = 150
     STATUS_UNINTERESTED = 160
     STATUS_CHOKED = 170
@@ -16,22 +18,23 @@ class PeerOperation(IntEnum):
     GET_CHUNK = 195
 
 class ReturnCode(IntEnum):
-    # Success codes
+    # Success codes (200-299)
     SUCCESS = 200
-    CREATED = 201
-    ACCEPTED = 202
+    FINISHED_DOWNLOAD = 201
+    FINISHED_SEEDING = 202
     
-    # Client error codes
+    # Client errors (400-499)
     BAD_REQUEST = 400
     UNAUTHORIZED = 401
     FORBIDDEN = 403
     NOT_FOUND = 404
-    CONFLICT = 409
-    
-    # Server error codes
-    SERVER_ERROR = 500
+    ALREADY_SEEDING = 409
+    NO_AVAILABLE_TORRENTS = 410
+    TORRENT_DOES_NOT_EXIST = 411
+    FAIL = 450
 
 class PayloadField(str, Enum):
+    """Payload field names"""
     OPERATION_CODE = 'OP_CODE'
     RETURN_CODE = 'RET_CODE'
     IP_ADDRESS = 'IP_ADDRESS'
@@ -48,6 +51,5 @@ class PayloadField(str, Enum):
     SEEDER_LIST = 'SEEDER_LIST'
     LEECHER_LIST = 'LEECHER_LIST'
 
-# Size constants
 READ_SIZE = 24576  # 24KB
 CHUNK_SIZE = 16384  # 16KB

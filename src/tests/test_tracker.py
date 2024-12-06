@@ -34,7 +34,6 @@ class TestTrackerServer(unittest.TestCase):
 
     def test_get_torrent_list_with_torrents(self):
         """Test getting torrent list with torrents"""
-        # Add a torrent first
         request = {
             PayloadField.PEER_ID: self.peer_id,
             PayloadField.IP_ADDRESS: self.ip,
@@ -61,7 +60,6 @@ class TestTrackerServer(unittest.TestCase):
 
     def test_handle_stop_seed(self):
         """Test stopping seeding"""
-        # Add a torrent first
         add_request = {
             PayloadField.PEER_ID: self.peer_id,
             PayloadField.IP_ADDRESS: self.ip,
@@ -71,7 +69,6 @@ class TestTrackerServer(unittest.TestCase):
         }
         status, torrent_id = self.tracker.add_new_file(add_request)
         
-        # Now try to stop seeding
         stop_request = {
             PayloadField.TORRENT_ID: torrent_id,
             PayloadField.PEER_ID: self.peer_id

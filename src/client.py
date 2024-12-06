@@ -30,19 +30,12 @@ class ClientHelper:
     def __init__(self, client):
         self.client = client
         
-    async def distribute_chunks_evenly(self, num_chunks: int, max_retries=3, retry_delay=1):
-        """
-        Distribute chunk requests evenly among available peers with retry mechanism
-        
-        Args:
-            num_chunks: Total number of chunks to download
-            max_retries: Maximum number of retry attempts per chunk
-            retry_delay: Delay between retries in seconds
-        """
+    async def split_chunks_between_peers(self, num_chunks: int, max_retries=3, retry_delay=1):
+        """Split torrent chunks beetween available peers"""
         logger.info(f"Starting distribution of {num_chunks} chunks")
         num_peers = len(self.client.seeder_list)
         peer_list = list(self.client.seeder_list.values())
-        failed_chunks = set(range(num_chunks))  # Track chunks that need downloading
+        failed_chunks = set(range(num_chunks))
         retry_count = 0
 
         while failed_chunks and retry_count < max_retries:
@@ -51,7 +44,7 @@ class ClientHelper:
                 await asyncio.sleep(retry_delay)
 
             # Try to download each missing chunk
-            for chunk_idx in list(failed_chunks):  # Convert to list to allow set modification
+            for chunk_idx in list(failed_chunks): 
                 curr_peer = chunk_idx % num_peers
                 request = self.client.create_peer_request(PeerOperation.GET_CHUNK, chunk_idx)
                 
@@ -83,10 +76,7 @@ class ClientHelper:
         return True
 
     async def download_file(self, num_chunks: int, filename: str):
-        """
-        Download file chunks and save to output directory
-        """
-        if not await self.distribute_chunks_evenly(num_chunks):
+        if not await self.split_chunks_between_peers(num_chunks):
             logger.error("Failed to download all chunks")
             return False
 
@@ -119,9 +109,6 @@ class ClientHelper:
             return 0
 
     def strip_filename(self, filename: str) -> str:
-        """
-        Strip directory path and escape chars from filename
-        """
         size = len(filename)
         stripped = ""
         for idx in range(size-1, -1, -1):
@@ -131,16 +118,12 @@ class ClientHelper:
         return stripped[::-1]
 
     def display_torrent_list(self, torrent_list):
-        """
-        Display formatted list of available torrents with detailed peer information
-        """
         id_width = 6
         name_width = 20
         chunks_width = 15
         label_width = 10
 
         print("\n" + "=" * 120)
-        # Main header
         headers = [
             "ID".ljust(id_width),
             "File Name".ljust(name_width),
@@ -151,12 +134,11 @@ class ClientHelper:
         print("-" * 120)
 
         for torrent in torrent_list:
-            # Print basic torrent info
             base_info = [
                 str(torrent[PayloadField.TORRENT_ID]).ljust(id_width),
                 torrent[PayloadField.FILE_NAME][:name_width-3].ljust(name_width),
                 str(torrent[PayloadField.NUM_OF_CHUNKS]).ljust(chunks_width),
-                ""  # Empty space for alignment
+                "" 
             ]
             print("  ".join(base_info))
 
@@ -167,7 +149,7 @@ class ClientHelper:
                 print(f"{' ' * (id_width + name_width + chunks_width + 4)}{'Seeders:'.ljust(label_width)}", end="")
                 for seeder in seeders:
                     print(seeder)
-                    if seeder != seeders[-1]:  # If not last seeder
+                    if seeder != seeders[-1]: 
                         print(f"{' ' * (id_width + name_width + chunks_width + label_width + 4)}", end="")
 
             # Print leechers
@@ -177,13 +159,13 @@ class ClientHelper:
                 print(f"{' ' * (id_width + name_width + chunks_width + 4)}{'Leechers:'.ljust(label_width)}", end="")
                 for leecher in leechers:
                     print(leecher)
-                    if leecher != leechers[-1]:  # If not last leecher
+                    if leecher != leechers[-1]:
                         print(f"{' ' * (id_width + name_width + chunks_width + label_width + 4)}", end="")
             
             if not seeders and not leechers:
                 print(f"{' ' * (id_width + name_width + chunks_width + 4)}No peers conßnected")
             
-            print("-" * 120)  # Separator between torrents
+            print("-" * 120)
 
         print("=" * 120 + "\n")
 
@@ -211,9 +193,6 @@ class Client:
         return self.state.seeding == True
     
     async def register_to_tracker(self, ip, port):
-        """
-        Connect to tracker server
-        """
         if ip is None:
             ip = "127.0.0.1"
         if port is None:
@@ -227,9 +206,6 @@ class Client:
             sys.exit(-1)
 
     async def connect_to_peer(self, ip, port, requests):
-        """
-        Connect to peer, send request payload and handle response
-        """
         try:
             logger.info(f"connecting to seeder at {ip}:{port}")
             reader, writer = await asyncio.open_connection(ip, int(port))
@@ -245,7 +221,7 @@ class Client:
     
     def _filter_payload(self, payload):
         """
-        Don't print whole chunk_data
+        Don't print whole chunk_data to better understand the logs.
         """
         if (type(payload) == str):
             return payload
@@ -321,10 +297,10 @@ class Client:
                 logger.error(f"JSON decode error: {str(e)}")
                 logger.error(f"Raw data received: {data.decode()}")
                 
-                # Add retry logic for empty/invalid responses
-                for _ in range(3):  # Try 3 times
+                # Retry logic for invalid responses
+                for _ in range(3): 
                     logger.info("Retrying read...")
-                    await asyncio.sleep(0.5)  # Wait before retry
+                    await asyncio.sleep(0.5)
                     data = await reader.read(READ_SIZE)
                     if data:
                         try:
@@ -333,7 +309,7 @@ class Client:
                             break
                         except json.JSONDecodeError:
                             continue
-                else:  # If all retries failed
+                else:
                     return ReturnCode.FAIL
                 
             opcode = payload[PayloadField.OPERATION_CODE]
@@ -401,9 +377,6 @@ class Client:
         return 1
 
     def create_server_request(self, opcode: int, torrent_id=None, filename=None) -> dict:
-        """
-        Create server request payload
-        """
         payload = {
             PayloadField.OPERATION_CODE: opcode,
             PayloadField.IP_ADDRESS: self.ip,
@@ -423,9 +396,6 @@ class Client:
         return payload
 
     def handle_peer_response(self, response) -> int:
-        """
-        Handle peer response
-        """
         ret = response[PayloadField.RETURN_CODE]
         opcode = response[PayloadField.OPERATION_CODE]
 
@@ -443,9 +413,6 @@ class Client:
         return ReturnCode.SUCCESS
 
     def handle_peer_request(self, request) -> dict:
-        """
-        Handle peer request and return response
-        """
         opcode = request[PayloadField.OPERATION_CODE]
         response = {
             PayloadField.OPERATION_CODE: opcode,
@@ -467,9 +434,6 @@ class Client:
         return response
         
     def create_peer_request(self, opcode: int, chunk_idx=None) -> dict:
-        """
-        Create peer request payload
-        """
         payload = {
             PayloadField.OPERATION_CODE: opcode,
             PayloadField.IP_ADDRESS: self.ip,

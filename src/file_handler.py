@@ -2,8 +2,6 @@ import os
 import hashlib
 from protocol import CHUNK_SIZE
 import base64
-#CHUNK_SIZE = 512 * 1024  # 512 KB
-
 
 def encode_file(file_name:str):
     chunks = [] 
@@ -22,7 +20,6 @@ def decode_file(chunks:list, path):
 class FileHandler:
     @staticmethod
     def calculate_hash(file_path):
-        """Calculate the SHA-256 hash of a file."""
         sha256_hash = hashlib.sha256()
         with open(file_path, "rb") as f:
             for byte_block in iter(lambda: f.read(4096), b""):
@@ -31,10 +28,8 @@ class FileHandler:
 
     @staticmethod
     def split_file(file_path):
-        """Split the file into chunks and return a dictionary of chunk hashes."""
         chunk_hashes = {}
 
-        # Get the file size
         file_size = os.path.getsize(file_path)
 
         # If the file is smaller than or equal to the chunk size, no splitting is needed
@@ -72,7 +67,6 @@ class FileHandler:
 
     @staticmethod
     def verify_chunk(chunk_id, file_name, expected_hash):
-        """Verify the integrity of a chunk using its hash."""
         chunk_filename = f"{file_name}_chunk_{chunk_id}"
         if not os.path.exists(chunk_filename):
             return False
@@ -86,7 +80,6 @@ class FileHandler:
         """
         chunk_filename = f"{file_name}_chunk_{chunk_id}"
         if os.path.exists(chunk_filename):
-            # Verify the chunk's integrity
             is_valid = FileHandler.verify_chunk(chunk_id, file_name, expected_hash)
             if is_valid:
                 print(f"Chunk {chunk_id} of {file_name} already exists and is valid.")
