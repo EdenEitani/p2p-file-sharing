@@ -78,7 +78,6 @@ def get_user_choice():
             logger.error("please enter a number")
 
 def validate_ip(ip: str) -> bool:
-    """Validate IP address format"""
     try:
         asyncio.streams.socket.inet_aton(ip)
         return True
@@ -86,7 +85,6 @@ def validate_ip(ip: str) -> bool:
         return False
 
 def validate_port(port: str) -> bool:
-    """Validate port number"""
     try:
         port_num = int(port)
         return 0 <= port_num <= 65535
@@ -127,7 +125,6 @@ def parse_arguments():
     return src_ip, src_port, dest_ip, dest_port
 
 async def handle_client_operation(client, reader, writer, operation):
-    """Handle a single client operation"""
     if not operation[0] > 0:
         writer.close()
         return True, None
