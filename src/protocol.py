@@ -1,34 +1,37 @@
 from enum import IntEnum, auto, Enum
 
 class PeerServerOperation(IntEnum):
-    """Operations between peer and server"""
-    GET_LIST = 10
-    GET_TORRENT = 11
-    START_SEED = 12
-    STOP_SEED = 13
-    UPLOAD_FILE = 14
+    GET_LIST = 100
+    GET_TORRENT = 110
+    START_SEED = 120
+    STOP_SEED = 130
+    UPLOAD_FILE = 140
 
 class PeerOperation(IntEnum):
-    """Operations between peers"""
-    STATUS_INTERESTED = 1
-    STATUS_UNINTERESTED = 2
-    STATUS_CHOKED = 3
-    STATUS_UNCHOKED = 4
-    GET_PEERS = 5
-    GET_CHUNK = 6
+    STATUS_INTERESTED = 150
+    STATUS_UNINTERESTED = 160
+    STATUS_CHOKED = 170
+    STATUS_UNCHOKED = 180
+    GET_PEERS = 190
+    GET_CHUNK = 195
 
 class ReturnCode(IntEnum):
-    """Return codes for operations"""
-    FINISHED_SEEDING = 2
-    FINISHED_DOWNLOAD = 1
-    SUCCESS = 0
-    FAIL = -1
-    ALREADY_SEEDING = -2
-    NO_AVAILABLE_TORRENTS = -3
-    TORRENT_DOES_NOT_EXIST = -4
+    # Success codes
+    SUCCESS = 200
+    CREATED = 201
+    ACCEPTED = 202
+    
+    # Client error codes
+    BAD_REQUEST = 400
+    UNAUTHORIZED = 401
+    FORBIDDEN = 403
+    NOT_FOUND = 404
+    CONFLICT = 409
+    
+    # Server error codes
+    SERVER_ERROR = 500
 
 class PayloadField(str, Enum):
-    """Payload field names"""
     OPERATION_CODE = 'OP_CODE'
     RETURN_CODE = 'RET_CODE'
     IP_ADDRESS = 'IP_ADDRESS'
