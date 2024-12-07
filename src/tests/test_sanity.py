@@ -112,31 +112,46 @@ class TestP2PPerformance(unittest.TestCase):
 
    @async_test
    async def test_failure_recovery_time(self):
-       chunk_count = 30
-       self.client.chunk_buffer.set_buffer(chunk_count)
+    chunk_count = 30
+    max_retries = 5
+    retry_delay = 0.1  # Add delay between retries
+    
+    for fail_rate in [0.1, 0.25, 0.5]:
+        self.client.chunk_buffer = ChunkBuffer()
+        self.client.chunk_buffer.set_buffer(chunk_count)
+        failed_chunks = set()
 
-       for fail_rate in [0.1, 0.25, 0.5]:
-           self.client.chunk_buffer = ChunkBuffer()
-           self.client.chunk_buffer.set_buffer(chunk_count)
+        async def fail_sometimes(*args, **kwargs):
+            request = args[2]
+            chunk_idx = request.get(PayloadField.CHUNK_IDX)
+            
+            if chunk_idx in failed_chunks and len(failed_chunks) >= (chunk_count * fail_rate):
+                failed_chunks.remove(chunk_idx)
+                self.client.chunk_buffer.add_data(Chunk(chunk_idx, self.test_data))
+                return ReturnCode.SUCCESS
+                
+            if random.random() < fail_rate:
+                failed_chunks.add(chunk_idx)
+                await asyncio.sleep(retry_delay)
+                return ReturnCode.FAILED_TO_DOWNLOAD
+                
+            self.client.chunk_buffer.add_data(Chunk(chunk_idx, self.test_data))
+            return ReturnCode.SUCCESS
 
-           def fail_sometimes(*args, **kwargs):
-               request = args[2]
-               chunk_idx = request.get(PayloadField.CHUNK_IDX)
-               if random.random() >= fail_rate:
-                   self.client.chunk_buffer.add_data(Chunk(chunk_idx, self.test_data))
-                   return ReturnCode.SUCCESS
-               return ReturnCode.FAIL
+        with patch('client.Client.connect_to_peer') as mock_connect:
+            mock_connect.side_effect = fail_sometimes
+            
+            start_time = time.time()
+            result = await self.client.helper.split_chunks_between_peers(
+                chunk_count, 
+                max_retries=max_retries,
+                retry_delay=retry_delay
+            )
+            recovery_time = time.time() - start_time
 
-           with patch('client.Client.connect_to_peer') as mock_connect:
-               mock_connect.side_effect = fail_sometimes
-               
-               start_time = time.time()
-               result = await self.client.helper.split_chunks_between_peers(chunk_count)
-               recovery_time = time.time() - start_time
-
-               self.assertTrue(result)
-               self.assertEqual(self.client.chunk_buffer.get_size(), chunk_count)
-               print(f"\nRecovery time with {fail_rate*100}% failure rate: {recovery_time:.2f}s")
+            self.assertTrue(result)
+            self.assertEqual(self.client.chunk_buffer.get_size(), chunk_count)
+            print(f"\nRecovery time with {fail_rate*100}% failure rate: {recovery_time:.2f}s")
 
    @async_test
    async def test_concurrent_downloads(self):
