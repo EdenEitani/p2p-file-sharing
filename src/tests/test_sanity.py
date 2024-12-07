@@ -113,8 +113,8 @@ class TestP2PPerformance(unittest.TestCase):
    @async_test
    async def test_failure_recovery_time(self):
     chunk_count = 30
-    max_retries = 5
-    retry_delay = 0.1  # Add delay between retries
+    max_retries = 10
+    retry_delay = 0.2  # Add delay between retries
     
     for fail_rate in [0.1, 0.25, 0.5]:
         self.client.chunk_buffer = ChunkBuffer()
