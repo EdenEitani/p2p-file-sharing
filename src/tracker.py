@@ -3,11 +3,12 @@ Tracker server for p2p file sharing.
 Manages torrents and peer connections.
 """
 from torrent import Torrent
-from protocol import PeerServerOperation, ReturnCode, PayloadField, READ_SIZE
+from protocol import PeerServerOperation, ReturnCode, PayloadField, READ_SIZE, MAX_TRACKER_CONNECTIONS
 import asyncio
 import json
 import sys
 from logger import setup_logger
+from connection_limiter import ConnectionLimiter
 
 logger = setup_logger()
 
@@ -15,6 +16,8 @@ class TrackerServer:
     def __init__(self):
         self.next_torrent_id = 0 
         self.torrents = {} # {torrentId: Torrent}
+        self.limiter = ConnectionLimiter(MAX_TRACKER_CONNECTIONS)
+        self.receive_request = self.limiter.limit_connections(self.receive_request)
 
     def handle_request(self, request) -> dict:
         """Handle incoming client request and return response"""

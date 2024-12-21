@@ -3,11 +3,12 @@ Handler module for user input and client setup.
 Provides command line interface for p2p file sharing client.
 """
 from client import Client
-from protocol import PeerServerOperation, ReturnCode, PayloadField
+from protocol import PeerServerOperation, ReturnCode, MAX_PEER_CONNECTIONS
 import asyncio
 import sys
 import os
 from logger import setup_logger
+from connection_limiter import ConnectionLimiter
 
 logger = setup_logger()
 
@@ -203,6 +204,7 @@ async def main():
         return
 
     client = Client(src_ip, src_port)
+    limiter = ConnectionLimiter(MAX_PEER_CONNECTIONS)
     
     # Use default tracker address if not provided
     dest_ip = dest_ip or "127.0.0.1"
@@ -212,7 +214,7 @@ async def main():
     logger.info(f"client connected: {src_ip}:{src_port}")
     
     try:
-        await run_client_loop(client, dest_ip, dest_port)
+        await limiter.limit_connections(run_client_loop)(client, dest_ip, dest_port)
     except Exception as e:
         logger.error(f"unexpected error: {str(e)}")
     finally:

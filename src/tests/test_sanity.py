@@ -8,10 +8,14 @@ from protocol import PeerOperation, ReturnCode, PayloadField
 from file_chunk import Chunk, ChunkBuffer
 
 def async_test(f):
-   def wrapper(*args, **kwargs):
-       loop = asyncio.get_event_loop()
-       return loop.run_until_complete(f(*args, **kwargs))
-   return wrapper
+    def wrapper(*args, **kwargs):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(f(*args, **kwargs))
+        finally:
+            loop.close()
+    return wrapper
 
 class TestP2PPerformance(unittest.TestCase):
    def setUp(self):
